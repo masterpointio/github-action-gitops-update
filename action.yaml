@@ -12,6 +12,9 @@ inputs:
   yaml_file_path:
     description: Path to the YAML file that should be updated
     required: true
+  commit_message:
+    description: Commit message that should be used when committing the changes
+    required: true
 
 runs:
   using: composite
@@ -35,5 +38,5 @@ runs:
         git config user.name github-actions
         git config user.email github-actions@github.com
         git add ${{ inputs.yaml_file_path }}
-        git commit --allow-empty -m "feat(gitops): updates ${{ inputs.yaml_key_path }} to ${{ inputs.new_value }} in ${{ inputs.yaml_file_path }}"
+        git commit --allow-empty -m "ci(gitops): ${{ inputs.commit_message }}"
         git push -u origin ${{ github.event.repository.default_branch }}
