@@ -28,9 +28,11 @@ runs:
         echo "Inputs - new_value: ${{ inputs.new_value }} yaml_key_path: ${{ inputs.yaml_key_path }} yaml_file_path: ${{ inputs.yaml_file_path }}"
         ls -la
     - name: Update YAML file with given value
-      uses: mikefarah/yq@master
+      uses: mikefarah/yq@v4.34.1
       with:
-        cmd: yq -i '${{ inputs.yaml_key_path }} = "${{ inputs.new_value }}"' '${{ inputs.yaml_file_path }}'
+        # Have to include a goofy diff / patch workaround to deal yq removing all whitespace newlines
+        # See https://github.com/mikefarah/yq/issues/515#issuecomment-1113957629
+        cmd: yq -i '${{ inputs.yaml_key_path }} = "${{ inputs.new_value }}"' '${{ inputs.yaml_file_path }}' | diff -B '${{ inputs.yaml_file_path }}' - | patch '${{ inputs.yaml_file_path }}' -
     - name: Commit files
       shell: bash
       run: |
