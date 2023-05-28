@@ -1,0 +1,39 @@
+name: gitops-update-commit
+description: Reusable GitHub Action to update a YAML file and commit the result
+author: hello@masterpoint.io
+
+inputs:
+  new_value:
+    description: New value that should replace the existing value at the given YAML path
+    required: true
+  yaml_key_path:
+    description: Path to the YAML key that should be updated within the given YAML file
+    required: true
+  yaml_file_path:
+    description: Path to the YAML file that should be updated
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Commit files
+      shell: bash
+      run: |
+        echo "Testing"
+        echo "Inputs - new_value: ${{ inputs.new_value }} yaml_key_path: ${{ inputs.yaml_key_path }} yaml_file_path: ${{ inputs.yaml_file_path }}"
+        ls -la
+    - name: Update YAML file with given value
+      uses: mikefarah/yq@master
+      with:
+        cmd: yq -i '${{ inputs.yaml_key_path }} = "${{ inputs.new_value }}"' '${{ inputs.yaml_file_path }}'
+    - name: Commit files
+      shell: bash
+      run: |
+        echo "Commiting and pushing changes"
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git add ${{ inputs.yaml_file_path }}
+        git commit --allow-empty -m "feat(gitops): updates ${{ inputs.yaml_key_path }} to ${{ inputs.new_value }} in ${{ inputs.yaml_file_path }}"
+        git push -u origin ${{ github.event.repository.default_branch }}
