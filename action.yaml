@@ -36,19 +36,24 @@ runs:
   using: composite
   steps:
     - name: Checkout
-      uses: actions/checkout@v3
-    - name: Update YAML file with given value
-      uses: mikefarah/yq@v4.34.1
-      with:
-        # Have to include a goofy diff / patch workaround to deal yq removing all whitespace newlines
-        # See https://github.com/mikefarah/yq/issues/515#issuecomment-1113957629
-        cmd: yq -i '${{ inputs.yaml_key_path }} = "${{ inputs.new_value }}"' '${{ inputs.yaml_file_path }}' | diff -B '${{ inputs.yaml_file_path }}' - | patch '${{ inputs.yaml_file_path }}' -
-    - name: Commit files
+      uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+
+    - name: 🏗 Set up yq
+      uses: frenck/action-setup-yq@c4b5be8b4a215c536a41d436757d9feb92836d4fj # v1.0.2
+
+    - name: Update YAML file + Commit + Push
       shell: bash
       run: |
-        echo "Committing and pushing changes"
+        echo "Updating file"
+        # Have to include a goofy diff / patch workaround to deal yq removing all whitespace newlines
+        # See https://github.com/mikefarah/yq/issues/515#issuecomment-1113957629
+        yq '${{ inputs.yaml_key_path }} = "${{ inputs.new_value }}"' '${{ inputs.yaml_file_path }}' | diff -B '${{ inputs.yaml_file_path }}' - | patch '${{ inputs.yaml_file_path }}' -
+
+        echo "Git config setup"
         git config user.name ${{ inputs.commit_username }}
         git config user.email ${{ inputs.commit_email }}
+
+        echo "Committing and pushing changes"
         git add ${{ inputs.yaml_file_path }}
         git commit --allow-empty -m "ci(gitops): ${{ inputs.commit_message }}"
         git push -u origin ${{ inputs.target_branch }}
