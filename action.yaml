@@ -1,4 +1,4 @@
-name: gitops-update-commit
+name: gitops-update
 description: Reusable GitHub Action to update a YAML file and commit the result
 author: hello@masterpoint.io
 
@@ -15,18 +15,28 @@ inputs:
   commit_message:
     description: Commit message that should be used when committing the changes
     required: true
+  commit_username:
+    description: The username of the user that will execute the commit.
+    default: github-actions
+    required: false
+  commit_email:
+    description: The email of the user that will execute the commit.
+    default: github-actions@github.com
+    required: false
+  target_branch:
+    description: The branch that should be pushed to
+    default: ${{ github.event.repository.default_branch }}
+    required: false
+  github_token:
+    description: The GitHub token used to commit and push the gitops changes (unnecessary if you don't have branch protections enabled on your target branch)
+    default: ${{ github.token }}
+    required: false
 
 runs:
   using: composite
   steps:
     - name: Checkout
       uses: actions/checkout@v3
-    - name: Commit files
-      shell: bash
-      run: |
-        echo "Testing"
-        echo "Inputs - new_value: ${{ inputs.new_value }} yaml_key_path: ${{ inputs.yaml_key_path }} yaml_file_path: ${{ inputs.yaml_file_path }}"
-        ls -la
     - name: Update YAML file with given value
       uses: mikefarah/yq@v4.34.1
       with:
@@ -36,9 +46,9 @@ runs:
     - name: Commit files
       shell: bash
       run: |
-        echo "Commiting and pushing changes"
-        git config user.name github-actions
-        git config user.email github-actions@github.com
+        echo "Committing and pushing changes"
+        git config user.name ${{ inputs.commit_username }}
+        git config user.email ${{ inputs.commit_email }}
         git add ${{ inputs.yaml_file_path }}
         git commit --allow-empty -m "ci(gitops): ${{ inputs.commit_message }}"
-        git push -u origin ${{ github.event.repository.default_branch }}
+        git push -u origin ${{ inputs.target_branch }}
