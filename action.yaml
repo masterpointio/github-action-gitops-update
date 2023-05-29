@@ -45,7 +45,7 @@ runs:
       shell: bash
       run: |
         echo "Installing patch"
-        apt-get install patch
+        sudo apt-get --assume-yes install patch
 
         echo "Updating file"
         # Have to include a goofy diff / patch workaround to deal yq removing all whitespace newlines
