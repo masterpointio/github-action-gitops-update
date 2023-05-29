@@ -47,7 +47,7 @@ runs:
         echo "Updating file"
         # Have to include a goofy diff / patch workaround to deal yq removing all whitespace newlines
         # See https://github.com/mikefarah/yq/issues/515#issuecomment-1113957629
-        yq '${{ inputs.yaml_key_path }} = "${{ inputs.new_value }}"' '${{ inputs.yaml_file_path }}' | diff -B '${{ inputs.yaml_file_path }}' - | patch --silent '${{ inputs.yaml_file_path }}' -
+        yq '${{ inputs.yaml_key_path }} = "${{ inputs.new_value }}"' '${{ inputs.yaml_file_path }}' | diff -B '${{ inputs.yaml_file_path }}' - | patch --silent '${{ inputs.yaml_file_path }}' -o -
 
         echo "Git config setup"
         git config user.name ${{ inputs.commit_username }}
