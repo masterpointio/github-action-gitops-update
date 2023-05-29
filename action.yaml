@@ -39,7 +39,7 @@ runs:
       uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
 
     - name: 🏗 Set up yq
-      uses: frenck/action-setup-yq@c4b5be8b4a215c536a41d436757d9feb92836d4fj # v1.0.2
+      uses: frenck/action-setup-yq@c4b5be8b4a215c536a41d436757d9feb92836d4f # v1.0.2
 
     - name: Update YAML file + Commit + Push
       shell: bash
