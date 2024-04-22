@@ -6,8 +6,8 @@ inputs:
   new_value:
     description: New value that should replace the existing value at the given YAML path
     required: true
-  yaml_key_path:
-    description: Path to the YAML key that should be updated within the given YAML file
+  yaml_key_paths:
+    description: Comma-separated list of paths to the YAML keys that should be updated within the given YAML file
     required: true
   yaml_file_path:
     description: Path to the YAML file that should be updated
@@ -36,7 +36,7 @@ runs:
   using: composite
   steps:
     - name: Checkout
-      uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.3
       with:
         token: ${{ inputs.github_token }}
 
@@ -46,11 +46,15 @@ runs:
     - name: Update YAML file + Commit + Push
       shell: bash
       run: |
-        echo "Updating file"
-        # Have to include a goofy diff / patch workaround to deal yq removing all whitespace newlines
-        # See https://github.com/mikefarah/yq/issues/515#issuecomment-1113957629
-        # Ugh, I need to add the "File updated successfully" to get the patch to work...
-        yq '${{ inputs.yaml_key_path }} = "${{ inputs.new_value }}"' '${{ inputs.yaml_file_path }}' | diff -B '${{ inputs.yaml_file_path }}' - | patch --silent '${{ inputs.yaml_file_path }}' - && echo "File updated successfully"
+        IFS=',' read -r -a key_paths <<< "${{ inputs.yaml_key_paths }}"
+        for key_path in "${key_paths[@]}"
+        do
+          echo "Updating path: $key_path"
+          # Have to include a goofy diff / patch workaround to deal yq removing all whitespace newlines
+          # See https://github.com/mikefarah/yq/issues/515#issuecomment-1113957629
+          # Ugh, I need to add the "File updated successfully" to get the patch to work...
+          yq "($key_path) = \"${{ inputs.new_value }}\"" "${{ inputs.yaml_file_path }}" | diff -B "${{ inputs.yaml_file_path }}" - | patch --silent "${{ inputs.yaml_file_path }}" - && echo "File updated successfully at $key_path"
+        done
 
         echo "Git config setup"
         git config user.name ${{ inputs.commit_username }}
