@@ -1,0 +1,80 @@
+name: test
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  BRANCH: test/gitops-${{ github.run_id }}-${{ github.run_attempt }}
+  FIXTURE: test/fixtures/values.yaml
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create scratch branch
+        run: git push origin "HEAD:refs/heads/${BRANCH}"
+
+  update:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        job: [a, b]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: GitOps Update
+        id: gitops
+        uses: ./
+        with:
+          new_value: ${{ github.run_id }}-${{ matrix.job }}
+          yaml_key_paths: .${{ matrix.job }}.tag
+          yaml_file_path: ${{ env.FIXTURE }}
+          commit_message: 'test ${{ matrix.job }} "quoted" $(echo pwned)'
+          target_branch: ${{ env.BRANCH }}
+
+      - name: Check outputs
+        env:
+          SHA: ${{ steps.gitops.outputs.sha }}
+          BASE_SHA: ${{ steps.gitops.outputs.base_sha }}
+          EXPECTED_MESSAGE: 'ci(gitops): test ${{ matrix.job }} "quoted" $(echo pwned)'
+        run: |
+          git fetch --depth=2 origin "$SHA"
+          test "$(git rev-parse "${SHA}~1")" = "$BASE_SHA"
+          test "$(git log -1 --format=%s "$SHA")" = "$EXPECTED_MESSAGE"
+
+  verify:
+    needs: update
+    runs-on: ubuntu-latest
+    env:
+      RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check both commits landed
+        run: |
+          git fetch origin "$BRANCH"
+          git log --format=%s FETCH_HEAD
+          for job in a b; do
+            git log --format=%s FETCH_HEAD | grep -qxF "ci(gitops): test ${job} \"quoted\" \$(echo pwned)"
+            test "$(git show "FETCH_HEAD:${FIXTURE}" | yq ".${job}.tag")" = "${RUN_ID}-${job}"
+          done
+          # The blank line between keys must survive the yq edit.
+          test "$(git show "FETCH_HEAD:${FIXTURE}" | wc -l)" = "$(wc -l < "$FIXTURE")"
+
+  cleanup:
+    needs: [setup, verify]
+    if: always() && needs.setup.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Delete scratch branch
+        run: git push origin --delete "$BRANCH"
