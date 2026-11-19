@@ -31,6 +31,18 @@ inputs:
     description: The GitHub token used to commit and push the gitops changes (unnecessary if you don't have branch protections enabled on your target branch)
     default: ${{ github.token }}
     required: false
+  max_attempts:
+    description: Number of times to retry the push when the target branch moved
+    default: "5"
+    required: false
+
+outputs:
+  sha:
+    description: SHA of the pushed commit
+    value: ${{ steps.commit.outputs.sha }}
+  base_sha:
+    description: SHA of the pushed commit's parent (target_branch before this update)
+    value: ${{ steps.commit.outputs.base_sha }}
 
 runs:
   using: composite
@@ -42,25 +54,44 @@ runs:
 
     - name: 🏗 Set up yq
       uses: frenck/action-setup-yq@c4b5be8b4a215c536a41d436757d9feb92836d4f # v1.0.2
+      with:
+        # A fixed version skips the unauthenticated GitHub API lookup for "latest", which runners often hit the rate limit on.
+        version: v4.54.1
 
-    - name: Update YAML file + Commit + Push
+    - name: Update, Commit and Push
+      id: commit
       shell: bash
+      env:
+        NEW_VALUE: ${{ inputs.new_value }}
+        YAML_KEY_PATHS: ${{ inputs.yaml_key_paths }}
+        YAML_FILE_PATH: ${{ inputs.yaml_file_path }}
+        COMMIT_MESSAGE: ${{ inputs.commit_message }}
+        COMMIT_USERNAME: ${{ inputs.commit_username }}
+        COMMIT_EMAIL: ${{ inputs.commit_email }}
+        TARGET_BRANCH: ${{ inputs.target_branch }}
+        MAX_ATTEMPTS: ${{ inputs.max_attempts }}
       run: |
-        IFS=',' read -r -a key_paths <<< "${{ inputs.yaml_key_paths }}"
-        for key_path in "${key_paths[@]}"
-        do
-          echo "Updating path: $key_path"
-          # Have to include a goofy diff / patch workaround to deal yq removing all whitespace newlines
-          # See https://github.com/mikefarah/yq/issues/515#issuecomment-1113957629
-          # Ugh, I need to add the "File updated successfully" to get the patch to work...
-          yq "($key_path) = \"${{ inputs.new_value }}\"" "${{ inputs.yaml_file_path }}" | diff -B "${{ inputs.yaml_file_path }}" - | patch --silent "${{ inputs.yaml_file_path }}" - && echo "File updated successfully at $key_path"
+        git config user.name "$COMMIT_USERNAME"
+        git config user.email "$COMMIT_EMAIL"
+        IFS=',' read -r -a key_paths <<< "$YAML_KEY_PATHS"
+
+        # Re-apply the edit on a fresh target branch each attempt, so a concurrent push never needs a merge.
+        for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)); do
+          git fetch --depth=1 origin "$TARGET_BRANCH"
+          git reset --hard FETCH_HEAD
+          for key_path in "${key_paths[@]}"; do
+            # diff/patch keeps the blank lines that yq strips: https://github.com/mikefarah/yq/issues/515
+            yq "(${key_path}) = strenv(NEW_VALUE)" "$YAML_FILE_PATH" | diff -B "$YAML_FILE_PATH" - | patch --silent "$YAML_FILE_PATH" - && echo "Updated $key_path"
+          done
+          git add "$YAML_FILE_PATH"
+          git commit --allow-empty -m "ci(gitops): ${COMMIT_MESSAGE}"
+          if git push origin "HEAD:${TARGET_BRANCH}"; then
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "base_sha=$(git rev-parse HEAD~1)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Push rejected (attempt ${attempt}/${MAX_ATTEMPTS}); retrying on the latest ${TARGET_BRANCH}"
+          sleep $((RANDOM % 10 + 5))
         done
-
-        echo "Git config setup"
-        git config user.name ${{ inputs.commit_username }}
-        git config user.email ${{ inputs.commit_email }}
-
-        echo "Committing and pushing changes"
-        git add ${{ inputs.yaml_file_path }}
-        git commit --allow-empty -m "ci(gitops): ${{ inputs.commit_message }}"
-        git push -u origin ${{ inputs.target_branch }}
+        echo "::error::Push to ${TARGET_BRANCH} rejected ${MAX_ATTEMPTS} times"
+        exit 1

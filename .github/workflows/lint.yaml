@@ -1,0 +1,29 @@
+name: lint
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  # The job name must stay `lint`: the Default ruleset requires a check with that exact name.
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read # for trunk-action
+      checks: write # for trunk-action
+      contents: read # for checkout + trunk-action
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # Trunk needs the merge-base to lint only the PR diff.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Trunk Check
+        uses: trunk-io/trunk-action@04ba50e7658c81db7356da96657e6e77f220bfa3 # v1.3.1
