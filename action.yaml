@@ -54,6 +54,9 @@ runs:
 
     - name: 🏗 Set up yq
       uses: frenck/action-setup-yq@c4b5be8b4a215c536a41d436757d9feb92836d4f # v1.0.2
+      with:
+        # A fixed version skips the unauthenticated GitHub API lookup for "latest", which runners often hit the rate limit on.
+        version: v4.54.1
 
     - name: Update, Commit and Push
       id: commit
